@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<!--
+  Content Security Policy в виде meta-тега: GitHub Pages не позволяет задавать свои HTTP-заголовки.
+  script-src разрешает только встроенный скрипт этой страницы (по SHA-256 хешу) и скрипты YouTube.
+  ВАЖНО: при любом изменении встроенного скрипта хеш нужно пересчитать, иначе приложение не запустится.
+  frame-ancestors, report-uri и sandbox в meta-CSP не работают, поэтому не используются.
+-->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-SJ2gLtlciN1+k0GBSSgpEELD+6/viX1Uy8+Cibok3+Y=' https://www.youtube.com https://s.ytimg.com; frame-src https://www.youtube-nocookie.com https://www.youtube.com; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Песни по строчкам</title>
+<style>
+:root{
+  --bg:#EEF1F5; --panel:#FFFFFF; --ink:#1F2A44; --muted:#66708A; --line:#D7DCE6;
+  --accent:#2F6F73; --accent-ink:#FFFFFF; --mark:#FFE45C; --mark-ink:#1F2A44;
+  --font:system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Hebrew", "Arial Hebrew", Arial, sans-serif;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#151B2B; --panel:#1E2638; --ink:#E6E9F0; --muted:#98A1B6; --line:#2E3850;
+    --accent:#5FB3B8; --accent-ink:#10202A; --mark:#FFE45C; --mark-ink:#1F2A44;
+  }
+}
+*,*::before,*::after{box-sizing:inherit}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font:16px/1.5 var(--font)}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+header{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;padding:.75rem 1rem;border-bottom:1px solid var(--line);background:var(--panel)}
+header h1{font-size:1.1rem;font-weight:700;margin:0 1rem 0 0}
+select{min-width:12rem;max-width:100%;padding:.45rem .6rem;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.btn{padding:.45rem .8rem;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.on{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+.spacer{flex:1}
+
+main{display:grid;grid-template-columns:minmax(320px,1.1fr) 1fr;gap:1.25rem;padding:1.25rem;max-width:1400px;margin:0 auto}
+.stage{position:sticky;top:1rem;align-self:start}
+.video{position:relative;aspect-ratio:16/9;background:#000;border-radius:12px;overflow:hidden}
+.video iframe,#player{position:absolute;inset:0;width:100%;height:100%}
+.video .hint{position:absolute;inset:0;display:grid;place-items:center;color:#aab;padding:1rem;text-align:center}
+.controls{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.75rem;align-items:center}
+.group{display:flex;gap:.25rem;align-items:center;padding-right:.5rem;margin-right:.25rem;border-right:1px solid var(--line)}
+.group:last-child{border-right:0}
+.small{font-size:.85rem;color:var(--muted)}
+.keys{margin-top:.75rem;font-size:.85rem;color:var(--muted)}
+kbd{font-family:inherit;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 .3rem;background:var(--panel)}
+
+.sync-banner{display:none;margin-top:.75rem;padding:.75rem 1rem;border-radius:10px;background:var(--mark);color:var(--mark-ink)}
+body.syncing .sync-banner{display:block}
+
+.lyrics{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:.5rem;min-height:300px}
+.lyrics h2{font-size:1.3rem;margin:.5rem .75rem 1rem}
+ol{list-style:none;margin:0;padding:0}
+.ln{display:grid;grid-template-columns:3.2rem 1fr;gap:.5rem;width:100%;text-align:start;border:0;background:transparent;padding:.55rem .75rem;border-radius:8px}
+.ln:hover{background:var(--bg)}
+.ln .time{font-size:.8rem;color:var(--muted);padding-top:.3rem;font-variant-numeric:tabular-nums}
+.ln .text{font-size:1.25rem;line-height:1.45}
+.ln .tr{font-size:.95rem;color:var(--muted);margin-top:.15rem}
+.ln.selected{box-shadow:inset 3px 0 0 var(--accent)}
+.ln.current .text{background:var(--mark);color:var(--mark-ink);box-decoration-break:clone;-webkit-box-decoration-break:clone;padding:0 .2rem;border-radius:3px}
+.ln.notime .time::after{content:"—"}
+.ln.sync-next{outline:2px dashed var(--accent)}
+body.hide-text .ln .text{filter:blur(7px);transition:filter .15s}
+body.hide-text .ln:hover .text,body.hide-text .ln:focus-visible .text{filter:none}
+body.hide-tr .ln .tr{display:none}
+.note{margin:0 .75rem 1rem}
+.empty{padding:2rem 1rem;text-align:center;color:var(--muted)}
+.empty p{max-width:32rem;margin:0 auto 1rem}
+
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);width:min(900px,96vw);padding:0}
+dialog::backdrop{background:rgba(20,25,40,.55)}
+.dlg{padding:1.25rem}
+.dlg h3{margin:0 0 1rem}
+label{display:block;font-weight:500;margin:.75rem 0 .3rem}
+input[type=text],textarea{width:100%;padding:.55rem .7rem;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+textarea{min-height:16rem;resize:vertical;line-height:1.5}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.dlg-actions{display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem}
+
+.toast{position:fixed;left:50%;bottom:calc(1.5rem + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:.6rem 1rem;border-radius:10px;opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw}
+.toast.show{opacity:1}
+
+@media (max-width:860px){
+  main{grid-template-columns:1fr;padding:.75rem}
+  .stage{top:0;z-index:2;background:var(--bg);padding-top:.25rem}
+  .keys{display:none}
+  .cols{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Песни по строчкам</h1>
+  <select id="songSelect" aria-label="Выбрать песню"></select>
+  <button class="btn primary" id="newBtn">Добавить песню</button>
+  <button class="btn" id="editBtn">Изменить</button>
+  <button class="btn" id="delBtn">Удалить</button>
+  <span class="spacer"></span>
+  <button class="btn" id="exportBtn" title="Сохранить все песни в файл">Резервная копия</button>
+  <button class="btn" id="importBtn" title="Загрузить песни из файла">Загрузить копию</button>
+  <input type="file" id="importFile" accept=".json" hidden>
+</header>
+
+<main>
+  <section class="stage">
+    <div class="video"><div id="player"></div><div class="hint" id="videoHint">Здесь появится клип</div></div>
+    <div class="controls">
+      <div class="group">
+        <button class="btn" id="prevBtn" title="Предыдущая строчка">◀</button>
+        <button class="btn" id="playBtn">Играть / пауза</button>
+        <button class="btn" id="nextBtn" title="Следующая строчка">▶</button>
+      </div>
+      <div class="group">
+        <button class="btn" id="loopBtn">Повтор строчки</button>
+      </div>
+      <div class="group" id="speedGroup">
+        <span class="small">Скорость</span>
+        <button class="btn" data-speed="0.5">0.5</button>
+        <button class="btn" data-speed="0.75">0.75</button>
+        <button class="btn on" data-speed="1">1</button>
+      </div>
+      <div class="group">
+        <button class="btn" id="hideTextBtn">Скрыть текст</button>
+        <button class="btn" id="hideTrBtn">Скрыть перевод</button>
+      </div>
+      <div class="group">
+        <button class="btn" id="syncBtn">Разметить время</button>
+        <span class="small">Сдвиг:</span>
+        <button class="btn" id="nudgeMinus" title="Строчка начнётся раньше">−0.5</button>
+        <button class="btn" id="nudgePlus" title="Строчка начнётся позже">+0.5</button>
+      </div>
+    </div>
+    <div class="sync-banner" id="syncBanner">
+      <strong>Разметка.</strong> Включи клип и нажимай <kbd>Пробел</kbd> в момент, когда начинается строчка в рамке.
+      <kbd>Backspace</kbd> отменяет последнюю отметку, <kbd>Esc</kbd> завершает разметку.
+    </div>
+    <div class="keys">
+      <kbd>Пробел</kbd> играть/пауза · <kbd>←</kbd> <kbd>→</kbd> строчки · <kbd>R</kbd> повтор · <kbd>H</kbd> скрыть текст · <kbd>[</kbd> <kbd>]</kbd> сдвиг времени
+    </div>
+  </section>
+
+  <section class="lyrics" id="lyrics" aria-live="off"></section>
+</main>
+
+<dialog id="editor">
+  <form class="dlg" method="dialog" id="editorForm">
+    <h3 id="editorTitle">Новая песня</h3>
+    <label for="fTitle">Название</label>
+    <input type="text" id="fTitle" placeholder="Исполнитель — песня">
+    <label for="fUrl">Ссылка на клип YouTube</label>
+    <input type="text" id="fUrl" placeholder="https://www.youtube.com/watch?v=...">
+    <div class="cols">
+      <div>
+        <label for="fLyrics">Текст, одна строчка на строку</label>
+        <textarea id="fLyrics" dir="auto" placeholder="Можно вставить и формат LRC: [01:23.45] строчка"></textarea>
+      </div>
+      <div>
+        <label for="fTr">Перевод (необязательно), строка в строку с текстом</label>
+        <textarea id="fTr" dir="auto"></textarea>
+      </div>
+    </div>
+    <p class="small">Перевод сопоставляется с текстом по номеру строки: оставь строку пустой, если для неё нет перевода. Тексты хранятся только в этом браузере.</p>
+    <div class="dlg-actions">
+      <button class="btn" value="cancel" formnovalidate>Отмена</button>
+      <button class="btn primary" id="saveBtn" value="save">Сохранить</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(() => {
+  'use strict';
+  // ---------- constants ----------
+  const KEY = 'language-song-trainer-v1';
+  const OLD_KEY = 'song-lines-v1';           // старый ключ: читается только для миграции, не удаляется
+  const LIMITS = { songs: 500, lines: 5000, title: 200, text: 1000, url: 500, importBytes: 5 * 1024 * 1024 };
+  const YT_ID = /^[\w-]{11}$/;
+  const SONG_ID = /^[\w-]{1,64}$/;
+
+  const $ = id => document.getElementById(id);
+  let songs = [], currentId = null;
+  let player = null, apiReady = false, pendingVideo = null;
+  let selected = -1, current = -1, loopOn = false;
+  let syncing = false, syncIdx = 0, currentSpeed = 1;
+
+  // ---------- validation ----------
+  const str = (v, max) => typeof v === 'string' ? v.slice(0, max) : null;
+  function cleanLine(l){
+    if (!l || typeof l !== 'object') return null;
+    const text = str(l.text, LIMITS.text); if (text === null || !text.trim()) return null;
+    const tr = l.tr === undefined ? '' : str(l.tr, LIMITS.text); if (tr === null) return null;
+    let t = l.t === undefined ? null : l.t;
+    if (t !== null && !(typeof t === 'number' && Number.isFinite(t) && t >= 0)) return null;
+    return { text, tr, t };
+  }
+  function cleanSong(s){
+    if (!s || typeof s !== 'object') return null;
+    if (typeof s.id !== 'string' || !SONG_ID.test(s.id)) return null;
+    const title = str(s.title, LIMITS.title), url = str(s.url, LIMITS.url);
+    if (title === null || url === null) return null;
+    if (typeof s.videoId !== 'string' || !YT_ID.test(s.videoId)) return null;
+    if (!Array.isArray(s.lines)) return null;
+    const lines = [];
+    for (const l of s.lines.slice(0, LIMITS.lines)) { const c = cleanLine(l); if (c) lines.push(c); }
+    if (!lines.length) return null;
+    return { id: s.id, title, url, videoId: s.videoId, lines };
+  }
+  function cleanStore(d){
+    if (!d || typeof d !== 'object' || !Array.isArray(d.songs)) return null;
+    const out = [], seen = new Set();
+    for (const s of d.songs) {
+      if (out.length >= LIMITS.songs) break;
+      const c = cleanSong(s); if (c && !seen.has(c.id)) { seen.add(c.id); out.push(c); }
+    }
+    const cid = typeof d.currentId === 'string' && seen.has(d.currentId) ? d.currentId : (out[0] ? out[0].id : null);
+    return { songs: out, currentId: cid };
+  }
+
+  // ---------- storage ----------
+  function readKey(k){
+    try { const raw = localStorage.getItem(k); return raw === null ? undefined : cleanStore(JSON.parse(raw)); }
+    catch(e){ return null; } // повреждённые данные или storage недоступен
+  }
+  function load(){
+    let d = readKey(KEY);
+    if (d === undefined) {                       // нового ключа нет: пробуем миграцию
+      const old = readKey(OLD_KEY);
+      if (old && old.songs.length) {
+        d = old;
+        songs = d.songs; currentId = d.currentId;
+        if (save(true)) toast('Песни перенесены в новую версию');
+        return;
+      }
+    }
+    if (d) { songs = d.songs; currentId = d.currentId; }
+  }
+  function save(quiet){
+    try { localStorage.setItem(KEY, JSON.stringify({ songs, currentId })); return true; }
+    catch(e){
+      const quota = e && (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014);
+      toast(quota
+        ? 'Память браузера заполнена. Изменения пока только в этой вкладке: сделай резервную копию и удали лишние песни.'
+        : 'Не удалось сохранить: память браузера недоступна. Изменения пока только в этой вкладке.', 6000);
+      return false;
+    }
+  }
+  const song = () => songs.find(s => s.id === currentId) || null;
+
+  // ---------- helpers ----------
+  function toast(msg, ms){ const t = $('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toast._h); toast._h = setTimeout(() => t.classList.remove('show'), ms || 2600); }
+  function fmt(t){ if (t == null) return ''; const m = Math.floor(t/60), s = Math.floor(t%60); return m + ':' + String(s).padStart(2,'0'); }
+  function el(tag, cls, text){ const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function videoIdFrom(url){
+    url = (url || '').trim();
+    if (YT_ID.test(url)) return url;
+    const m = url.match(/(?:v=|youtu\.be\/|shorts\/|embed\/|live\/)([\w-]{11})(?![\w-])/);
+    return m ? m[1] : null;
+  }
+  const LRC_TIME = /^\[(\d{1,2}):(\d{1,2}(?:[.,]\d{1,3})?)\]\s*/;
+  const LRC_META = /^\[[a-z]+:.*\]$/i;
+  // Строки текста и перевода сопоставляются по номеру строки в поле ввода,
+  // поэтому пустая строка в переводе = пустой перевод для этой строчки.
+  function buildLines(lyricsText, trText){
+    const raw = lyricsText.split(/\r?\n/), trRaw = trText.split(/\r?\n/), out = [];
+    for (let i = 0; i < raw.length && out.length < LIMITS.lines; i++) {
+      let line = raw[i].trim(); if (!line || LRC_META.test(line)) continue;
+      let t = null; const m = line.match(LRC_TIME);
+      if (m) { t = (+m[1])*60 + parseFloat(m[2].replace(',', '.')); line = line.slice(m[0].length).trim(); }
+      if (!line) continue;
+      const tr = (trRaw[i] || '').trim().replace(LRC_TIME, '');
+      out.push({ text: line.slice(0, LIMITS.text), tr: tr.slice(0, LIMITS.text), t: Number.isFinite(t) ? t : null });
+    }
+    return { lines: out, truncated: raw.filter(x => x.trim()).length > LIMITS.lines };
+  }
+  function segEnd(lines, i){
+    for (let j = i + 1; j < lines.length; j++) if (lines[j].t != null) return lines[j].t;
+    const d = ok() && player.getDuration ? player.getDuration() : 0;
+    return d > 0 ? d : null;                     // null: длительность ещё неизвестна
+  }
+  const typing = () => { const a = document.activeElement;
+    return (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT')) || $('editor').open; };
+
+  // ---------- YouTube ----------
+  window.onYouTubeIframeAPIReady = () => { apiReady = true; if (pendingVideo) loadVideo(pendingVideo); };
+  const tag = document.createElement('script'); tag.src = 'https://www.youtube.com/iframe_api';
+  tag.onerror = () => { $('videoHint').textContent = 'Не удалось загрузить плеер YouTube. Проверь интернет.'; };
+  document.head.appendChild(tag);
+
+  function loadVideo(id){
+    const hint = $('videoHint');
+    if (!id || !YT_ID.test(id)) { hint.style.display = 'grid'; hint.textContent = 'В этой песне нет корректной ссылки на клип'; return; }
+    if (!apiReady) { pendingVideo = id; return; }
+    hint.style.display = 'none';
+    if (player && player.cueVideoById) { player.cueVideoById(id); return; }
+    const vars = { playsinline: 1, rel: 0 };
+    if (/^https?:$/.test(location.protocol)) vars.origin = location.origin;
+    player = new YT.Player('player', {
+      host: 'https://www.youtube-nocookie.com', videoId: id, playerVars: vars,
+      events: {
+        onReady: () => applySpeed(currentSpeed),
+        onStateChange: e => {                     // клип закончился на последней строчке с повтором
+          if (e.data === 0 && loopOn && !syncing) { const s = song();
+            if (s && selected >= 0 && s.lines[selected].t != null) { player.seekTo(s.lines[selected].t, true); player.playVideo(); } }
+        },
+        onError: e => { hint.style.display = 'grid';
+          hint.textContent = (e.data === 101 || e.data === 150)
+            ? 'Владелец клипа запретил показывать его на других сайтах. Попробуй другую загрузку этой песни.'
+            : 'YouTube не смог воспроизвести видео (код ' + e.data + ').'; }
+      }
+    });
+  }
+  const ok = () => player && typeof player.getCurrentTime === 'function';
+  const now = () => ok() ? player.getCurrentTime() : 0;
+
+  // ---------- render ----------
+  function renderSelect(){
+    const sel = $('songSelect'); sel.replaceChildren();
+    if (!songs.length) { sel.add(new Option('Песен пока нет', '')); sel.disabled = true; return; }
+    sel.disabled = false;
+    songs.forEach(s => sel.add(new Option(s.title || 'Без названия', s.id)));
+    sel.value = currentId || '';
+  }
+  function renderLyrics(){
+    const box = $('lyrics'); box.replaceChildren();
+    const s = song();
+    $('editBtn').disabled = $('delBtn').disabled = !s;
+    if (!s) {
+      const wrap = el('div', 'empty');
+      wrap.appendChild(el('p', null, 'Добавь первую песню: ссылку на клип и текст по строчкам. Потом разметь время, и каждая строчка станет кнопкой.'));
+      const b = el('button', 'btn primary', 'Добавить песню'); b.onclick = () => openEditor(null);
+      wrap.appendChild(b); box.appendChild(wrap); return;
+    }
+    const h = el('h2', null, s.title || 'Без названия'); h.dir = 'auto'; box.appendChild(h);
+    if (!s.lines.some(l => l.t != null)) {
+      const p = el('p', 'small note', 'У строчек ещё нет времени. Нажми «Разметить время» и отмечай начало каждой строчки пробелом.');
+      box.appendChild(p);
+    }
+    const ol = document.createElement('ol');
+    s.lines.forEach((l, i) => {
+      const li = document.createElement('li');
+      const b = el('button', 'ln' + (l.t == null ? ' notime' : '')); b.dataset.i = i;
+      const body = document.createElement('div');
+      const tx = el('div', 'text', l.text); tx.dir = 'auto'; body.appendChild(tx);
+      if (l.tr) { const tr = el('div', 'tr', l.tr); tr.dir = 'auto'; body.appendChild(tr); }
+      b.append(el('span', 'time', fmt(l.t)), body); b.onclick = () => playLine(i);
+      li.appendChild(b); ol.appendChild(li);
+    });
+    box.appendChild(ol);
+    paint();
+  }
+  function paint(){
+    document.querySelectorAll('.ln').forEach(n => {
+      const i = +n.dataset.i;
+      n.classList.toggle('current', i === current);
+      n.classList.toggle('selected', i === selected);
+      n.classList.toggle('sync-next', syncing && i === syncIdx);
+    });
+  }
+  function setTime(i, t){ const n = document.querySelector('.ln[data-i="' + i + '"] .time'); if (n) n.textContent = fmt(t); }
+  function scrollTo(i){ const n = document.querySelector('.ln[data-i="' + i + '"]');
+    if (n) n.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); }
+
+  // ---------- playback ----------
+  function playLine(i){
+    const s = song(); if (!s || !s.lines[i]) return;
+    if (syncing) { syncIdx = i; paint(); return; }
+    selected = i;
+    const t = s.lines[i].t;
+    if (t == null) { paint(); toast('У этой строчки нет времени. Сначала разметь песню.'); return; }
+    if (!ok()) { toast('Плеер ещё загружается'); return; }
+    player.seekTo(t, true); player.playVideo(); current = i; paint();
+  }
+  function step(d){
+    const s = song(); if (!s) return;
+    let i = (selected >= 0 ? selected : current) + d;
+    while (i >= 0 && i < s.lines.length && s.lines[i].t == null) i += d;
+    if (i >= 0 && i < s.lines.length) { playLine(i); scrollTo(i); }
+  }
+  function togglePlay(){ if (!ok()) return; player.getPlayerState() === 1 ? player.pauseVideo() : player.playVideo(); }
+
+  setInterval(() => {
+    const s = song(); if (!s || !ok() || syncing) return;
+    const t = now();
+    if (loopOn && selected >= 0 && s.lines[selected] && s.lines[selected].t != null) {
+      const start = s.lines[selected].t, end = segEnd(s.lines, selected);
+      if ((end !== null && t >= end - 0.15) || t < start - 0.5) { player.seekTo(start, true); return; }
+    }
+    let c = -1;
+    for (let i = 0; i < s.lines.length; i++) if (s.lines[i].t != null && s.lines[i].t <= t + 0.05) c = i;
+    if (c !== current) { current = c; paint(); if (c >= 0 && player.getPlayerState() === 1) scrollTo(c); }
+  }, 120);
+
+  function applySpeed(v){ currentSpeed = v; if (ok() && player.setPlaybackRate) player.setPlaybackRate(v);
+    document.querySelectorAll('[data-speed]').forEach(b => b.classList.toggle('on', +b.dataset.speed === v)); }
+
+  // ---------- sync ----------
+  function startSync(){
+    const s = song(); if (!s) return;
+    if (!ok()) { toast('Плеер ещё загружается'); return; }
+    syncing = true; syncIdx = selected >= 0 ? selected : 0;
+    if (syncIdx > 0 && s.lines[syncIdx-1].t != null) player.seekTo(s.lines[syncIdx-1].t, true);
+    else if (syncIdx === 0) player.seekTo(0, true);
+    document.body.classList.add('syncing'); $('syncBtn').classList.add('on'); $('syncBtn').textContent = 'Завершить разметку';
+    paint(); scrollTo(syncIdx);
+  }
+  function stopSync(){
+    syncing = false; document.body.classList.remove('syncing');
+    $('syncBtn').classList.remove('on'); $('syncBtn').textContent = 'Разметить время';
+    save(); renderLyrics();
+  }
+  function markSync(){
+    const s = song(); if (!s || syncIdx >= s.lines.length) return;
+    s.lines[syncIdx].t = Math.max(0, +(now() - 0.25).toFixed(2)); // поправка на реакцию
+    setTime(syncIdx, s.lines[syncIdx].t);
+    syncIdx++;
+    if (syncIdx >= s.lines.length) { toast('Готово, все строчки размечены'); stopSync(); return; }
+    paint(); scrollTo(syncIdx);
+  }
+  function undoSync(){
+    const s = song(); if (!s || syncIdx === 0) return;
+    syncIdx--; const prev = s.lines[syncIdx].t; s.lines[syncIdx].t = null; setTime(syncIdx, null);
+    if (prev != null) player.seekTo(Math.max(0, prev - 2), true);
+    paint();
+  }
+  function nudge(d){
+    const s = song(); const i = selected >= 0 ? selected : current;
+    if (!s || i < 0 || s.lines[i].t == null) { toast('Выбери строчку со временем'); return; }
+    s.lines[i].t = Math.max(0, +(s.lines[i].t + d).toFixed(2)); save(); setTime(i, s.lines[i].t);
+    selected = i; playLine(i);
+  }
+
+  // ---------- editor ----------
+  let editingId = null;
+  function openEditor(id){
+    if (!id && songs.length >= LIMITS.songs) { toast('Достигнут лимит: ' + LIMITS.songs + ' песен. Удали ненужные.'); return; }
+    editingId = id; const s = id ? songs.find(x => x.id === id) : null;
+    $('editorTitle').textContent = s ? 'Изменить песню' : 'Новая песня';
+    $('fTitle').value = s ? s.title : '';
+    $('fUrl').value = s ? s.url : '';
+    $('fLyrics').value = s ? s.lines.map(l => l.text).join('\n') : '';
+    $('fTr').value = s ? s.lines.map(l => l.tr || '').join('\n') : '';
+    $('editor').showModal(); $('fTitle').focus();
+  }
+  $('editorForm').addEventListener('submit', e => {
+    if (!e.submitter || e.submitter.value !== 'save') return;
+    const url = $('fUrl').value.trim().slice(0, LIMITS.url), vid = videoIdFrom(url);
+    const { lines, truncated } = buildLines($('fLyrics').value, $('fTr').value);
+    if (!vid) { e.preventDefault(); toast('Ссылка не похожа на клип YouTube'); $('fUrl').focus(); return; }
+    if (!lines.length) { e.preventDefault(); toast('Вставь текст песни'); $('fLyrics').focus(); return; }
+    const old = editingId ? songs.find(x => x.id === editingId) : null;
+    if (old) lines.forEach((l, i) => { if (l.t == null && old.lines[i]) l.t = old.lines[i].t; });
+    const title = ($('fTitle').value.trim() || 'Без названия').slice(0, LIMITS.title);
+    if (old) Object.assign(old, { title, url, videoId: vid, lines });
+    else {
+      const s = { id: 'id' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), title, url, videoId: vid, lines };
+      songs.push(s); currentId = s.id;
+    }
+    if (truncated) toast('Сохранены первые ' + LIMITS.lines + ' строчек');
+    selected = current = -1; save(); renderSelect(); renderLyrics(); loadVideo(vid);
+  });
+
+  // ---------- UI wiring ----------
+  $('songSelect').onchange = e => { if (syncing) stopSync(); currentId = e.target.value; selected = current = -1; save(); renderLyrics(); const s = song(); if (s) loadVideo(s.videoId); };
+  $('newBtn').onclick = () => openEditor(null);
+  $('editBtn').onclick = () => { if (currentId) openEditor(currentId); };
+  $('delBtn').onclick = () => {
+    const s = song(); if (!s || !confirm('Удалить «' + s.title + '»? Это нельзя отменить.')) return;
+    songs = songs.filter(x => x.id !== s.id); currentId = songs[0] ? songs[0].id : null;
+    selected = current = -1; save(); renderSelect(); renderLyrics(); if (song()) loadVideo(song().videoId);
+  };
+  $('playBtn').onclick = togglePlay;
+  $('prevBtn').onclick = () => step(-1);
+  $('nextBtn').onclick = () => step(1);
+  $('loopBtn').onclick = () => { loopOn = !loopOn; $('loopBtn').classList.toggle('on', loopOn);
+    if (loopOn && selected < 0 && current >= 0) selected = current; paint(); toast(loopOn ? 'Повтор включён' : 'Повтор выключен'); };
+  document.querySelectorAll('[data-speed]').forEach(b => b.onclick = () => applySpeed(+b.dataset.speed));
+  $('hideTextBtn').onclick = () => { const on = document.body.classList.toggle('hide-text'); $('hideTextBtn').classList.toggle('on', on); };
+  $('hideTrBtn').onclick = () => { const on = document.body.classList.toggle('hide-tr'); $('hideTrBtn').classList.toggle('on', on); };
+  $('syncBtn').onclick = () => syncing ? stopSync() : startSync();
+  $('nudgeMinus').onclick = () => nudge(-0.5);
+  $('nudgePlus').onclick = () => nudge(0.5);
+
+  $('exportBtn').onclick = () => {
+    const blob = new Blob([JSON.stringify({ songs }, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = 'pesni-' + new Date().toISOString().slice(0, 10) + '.json'; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+  $('importBtn').onclick = () => $('importFile').click();   // файл читается только после явного выбора
+  $('importFile').onchange = async e => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    if (f.size > LIMITS.importBytes) { toast('Файл больше 5 МБ. Это не похоже на резервную копию.'); return; }
+    let d;
+    try { d = cleanStore(JSON.parse(await f.text())); } catch(err){ d = null; }
+    if (!d) { toast('Файл не подходит: нужна резервная копия из этого инструмента'); return; }
+    const have = new Set(songs.map(s => s.id)); let n = 0, skipped = 0;
+    for (const s of d.songs) {
+      if (have.has(s.id)) continue;
+      if (songs.length >= LIMITS.songs) { skipped++; continue; }
+      songs.push(s); have.add(s.id); n++;
+    }
+    if (!currentId && songs[0]) currentId = songs[0].id;
+    save(); renderSelect(); renderLyrics(); if (song()) loadVideo(song().videoId);
+    toast('Добавлено песен: ' + n + (skipped ? '. Не поместилось из-за лимита: ' + skipped : ''));
+  };
+
+  document.addEventListener('keydown', e => {
+    if (typing() || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (syncing) {
+      if (e.code === 'Space') { e.preventDefault(); markSync(); }
+      else if (e.key === 'Backspace') { e.preventDefault(); undoSync(); }
+      else if (e.key === 'Escape') { e.preventDefault(); stopSync(); }
+      return;
+    }
+    switch (e.code) {
+      case 'Space': e.preventDefault(); togglePlay(); break;
+      case 'ArrowLeft': e.preventDefault(); step(-1); break;
+      case 'ArrowRight': e.preventDefault(); step(1); break;
+      case 'KeyR': $('loopBtn').click(); break;
+      case 'KeyH': $('hideTextBtn').click(); break;
+      case 'BracketLeft': nudge(-0.5); break;
+      case 'BracketRight': nudge(0.5); break;
+    }
+  });
+
+  // ---------- start ----------
+  load();
+  renderSelect(); renderLyrics();
+  if (song()) loadVideo(song().videoId);
+})();
+
+</script>
+</body>
+</html>
